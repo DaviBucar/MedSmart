@@ -8,92 +8,15 @@ datasource db {
 }
 
 model User {
-  id        String               @id @default(uuid())
+  id        String     @id @default(uuid())
   name      String
-  email     String               @unique
+  email     String     @unique
   password  String
-  role      Role                 @default(USER)
-  createdAt DateTime             @default(now())
-  updatedAt DateTime             @updatedAt
-
-  /// Relação one‑to‑one para o perfil de estudo
-  studyProfile   UserStudyProfile? @relation("UserToStudyProfile")
-
-  /// Relação one‑to‑one para as preferências
-  preferences    UserPreferences?  @relation("UserToPreferences")
-
-  sessions  UserSession[]
-  documents PdfDocument[]
-}
-
-model UserStudyProfile {
-  userId          String   @id
-  weakSubjects    String[]
-  strongSubjects  String[]
-  accuracy        Float    @default(0)
-  xp              Int      @default(0)
-  studyHabitScore Float    @default(0)
-
-  /// Define fk e nome da relação
-  user            User     @relation("UserToStudyProfile", fields: [userId], references: [id])
-}
-
-model UserPreferences {
-  userId               String @id
-  preferredStudyMethod String
-  dailyGoal            Int
-  preferredTimeOfDay   String
-
-  /// Define fk e nome da relação
-  user                 User   @relation("UserToPreferences", fields: [userId], references: [id])
-}
-
-model UserSession {
-  id        String    @id @default(uuid())
-  userId    String
-  startedAt DateTime  @default(now())
-  endedAt   DateTime?
-  topics    String[]
-  score     Int?
-  mistakes  Int?
-  aiSummary String?
-
-  user      User      @relation(fields: [userId], references: [id])
-  metrics   PerformanceMetric[]
-}
-
-model PerformanceMetric {
-  id         String      @id @default(uuid())
-  sessionId  String
-  questionId String
-  correct    Boolean
-  timeSpent  Int
-  createdAt  DateTime    @default(now())
-
-  session    UserSession @relation(fields: [sessionId], references: [id])
-}
-
-model PdfDocument {
-  id        String         @id @default(uuid())
-  userId    String
-  s3Key     String
-  status    DocumentStatus @default(PENDING)
-  createdAt DateTime       @default(now())
-
-  user      User           @relation(fields: [userId], references: [id])
-  result    PdfResult?
-}
-
-model PdfResult {
-  id            String      @id @default(uuid())
-  documentId    String      @unique
-  extractedText String
-  summary       String
-  mindMapJson   Json
-  questionsJson Json
-  createdAt     DateTime    @default(now())
-
-  document      PdfDocument @relation(fields: [documentId], references: [id])
+  role      Role       @default(USER)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  
+  documents Document[]
 }
 
 enum Role {
@@ -104,6 +27,40 @@ enum Role {
 enum DocumentStatus {
   PENDING
   PROCESSING
-  DONE
+  COMPLETED
   FAILED
+}
+
+model Document {
+  id           String         @id @default(uuid())
+  userId       String
+  filename     String         // Nome único do arquivo no sistema
+  originalName String         // Nome original do arquivo
+  mimeType     String
+  size         Int
+  status       DocumentStatus @default(PENDING)
+  filePath     String         // Caminho para o arquivo
+  extractedText String?       @db.Text // Texto extraído do PDF
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  analysis     DocumentAnalysis?
+  
+  @@map("documents")
+}
+
+model DocumentAnalysis {
+  id          String   @id @default(uuid())
+  documentId  String   @unique
+  summary     String   @db.Text
+  keywords    String[] // Array de palavras-chave
+  mindMap     Json     // Estrutura do mapa mental em JSON
+  questions   Json     // Array de questões em JSON
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  
+  @@map("document_analyses")
 }

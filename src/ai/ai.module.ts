@@ -1,11 +1,8 @@
 import { Module } from '@nestjs/common';
-import { HttpModule } from '@nestjs/axios';
-import { AiService } from './ai.service';
-import { PromptService } from './prompt.service';
+import { DeepSeekService } from './services/deepseek.service';
 
 @Module({
-  imports: [HttpModule], // disponibiliza HttpService
-  providers: [AiService, PromptService],
-  exports: [AiService], // outros módulos (e.g. ProcessingModule) usarão AiService
+  providers: [DeepSeekService],
+  exports: [DeepSeekService],
 })
-export class AiModule {}
+export class AIModule {}

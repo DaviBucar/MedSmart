@@ -1,0 +1,9 @@
+# Ignora dependências do Node, pois elas serão instaladas dentro do container
+node_modules
+
+# Ignora logs e arquivos de ambiente
+npm-debug.log
+.env
+
+# Ignora o diretório de build (será gerado dentro do container)
+dist

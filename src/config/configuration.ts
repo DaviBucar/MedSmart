@@ -15,14 +15,15 @@ export default () => ({
     expiresIn: process.env.JWT_EXPIRATION ?? '3600s',
   },
 
-  aws: {
-    region: process.env.AWS_REGION ?? '',
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID ?? '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY ?? '',
-    s3Bucket: process.env.S3_BUCKET_NAME ?? '',
+  deepseek: {
+    apiKey: process.env.DEEPSEEK_API_KEY ?? '',
+    baseUrl: process.env.DEEPSEEK_BASE_URL ?? 'https://api.deepseek.com',
+    model: process.env.DEEPSEEK_MODEL ?? 'deepseek-chat',
   },
 
-  bull: {
-    redisUrl: process.env.REDIS_URL ?? 'redis://localhost:6379',
+  upload: {
+    maxFileSize: parseInt(process.env.MAX_FILE_SIZE || '10485760'), // 10MB por padrão
+    allowedMimeTypes: ['application/pdf'],
+    uploadDir: process.env.UPLOAD_DIR || './uploads',
   },
 });

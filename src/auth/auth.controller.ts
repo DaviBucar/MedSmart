@@ -9,15 +9,22 @@ import { Public } from './public.decorator';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) {
+    console.log('🎯 AuthController inicializado');
+  }
 
   @Post('register')
   register(@Body() dto: RegisterDto) {
+    console.log('🔥 CHEGOU NO CONTROLLER REGISTER!');
+    console.log('📝 Dados recebidos:', dto);
+    console.log('📝 Tipo dos dados:', typeof dto);
+    console.log('📝 Keys:', Object.keys(dto || {}));
     return this.authService.register(dto);
   }
 
   @Post('login')
   login(@Body() dto: LoginDto) {
+    console.log('🔥 CHEGOU NO CONTROLLER LOGIN!');
     return this.authService.login(dto);
   }
 
