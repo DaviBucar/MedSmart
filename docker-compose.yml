@@ -9,7 +9,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
-      - '5433:5432'  # Mudança aqui: usar porta 5433 no host
+      - '5433:5432'  
 
   app:
     build:

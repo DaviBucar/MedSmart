@@ -17,7 +17,6 @@ export class FileProcessingService {
     this.maxFileSize = this.configService.get<number>('upload.maxFileSize') || 10485760;
     this.allowedMimeTypes = this.configService.get<string[]>('upload.allowedMimeTypes') || ['application/pdf'];
     
-    // Inicializar diretório de forma assíncrona
     this.initializeUploadDir();
   }
 
@@ -45,7 +44,6 @@ export class FileProcessingService {
     }
 
     try {
-      // Garantir que o diretório existe antes de salvar
       await this.ensureUploadDirExists();
 
       const fileExtension = path.extname(file.originalname);
@@ -75,7 +73,6 @@ export class FileProcessingService {
     }
 
     try {
-      // Verificar se o arquivo existe
       await fs.access(filePath);
 
       const fileBuffer = await fs.readFile(filePath);

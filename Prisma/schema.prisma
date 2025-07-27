@@ -16,7 +16,16 @@ model User {
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
   
+  // Relacionamentos existentes
   documents Document[]
+  
+  // Novos relacionamentos para sessões
+  studySessions     StudySession[]
+  questionInteractions QuestionInteraction[]
+  topicProgress     TopicProgress[]
+  userPreferences   UserPreferences?
+  userMetricsCache  UserMetricsCache?
+  achievements      UserAchievement[]
 }
 
 enum Role {
@@ -35,7 +44,7 @@ model Document {
   id           String         @id @default(uuid())
   userId       String
   filename     String         // Nome único do arquivo no sistema
-  originalName String         // Nome original do arquivo
+  originalName String
   mimeType     String
   size         Int
   status       DocumentStatus @default(PENDING)
@@ -63,4 +72,252 @@ model DocumentAnalysis {
   document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
   
   @@map("document_analyses")
+}
+
+// ==========================================
+// MÓDULO DE SESSÕES - OTIMIZADO PARA CUSTOS
+// ==========================================
+
+enum StudyGoal {
+  REVIEW          // Revisão de conteúdo já estudado
+  NEW_CONTENT     // Estudo de novo conteúdo
+  PRACTICE        // Prática com questões
+  EXAM_PREP       // Preparação para prova específica
+  QUICK_REVIEW    // Revisão rápida
+}
+
+enum SessionStatus {
+  ACTIVE          // Sessão em andamento
+  PAUSED          // Sessão pausada
+  COMPLETED       // Sessão finalizada
+  ABANDONED       // Sessão abandonada sem finalizar
+}
+
+enum DifficultyLevel {
+  EASY
+  MEDIUM
+  HARD
+  ADAPTIVE        // Dificuldade adaptativa baseada na performance
+}
+
+enum BloomLevel {
+  REMEMBER        // Lembrar
+  UNDERSTAND      // Compreender
+  APPLY           // Aplicar
+  ANALYZE         // Analisar
+  EVALUATE        // Avaliar
+  CREATE          // Criar
+}
+
+model StudySession {
+  id                    String        @id @default(uuid())
+  userId                String
+  status                SessionStatus @default(ACTIVE)
+  studyGoal             StudyGoal
+  
+  // Tempos otimizados (apenas essenciais)
+  startTime             DateTime      @default(now())
+  endTime               DateTime?
+  duration              Int?          // Duração total em minutos (calculado)
+  
+  // Métricas essenciais (pré-calculadas)
+  questionsAnswered     Int           @default(0)
+  correctAnswers        Int           @default(0)
+  topicsStudied         String[]      // Array compacto de tópicos
+  
+  // Scores agregados (evita cálculos complexos)
+  performanceScore      Int?          @db.SmallInt // 0-100 (SmallInt para economia)
+  focusScore            Int?          @db.SmallInt // 0-100
+  
+  // Contexto mínimo
+  deviceType            String?       @db.VarChar(20) // mobile/desktop/tablet
+  
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  
+  // Relacionamentos
+  user                  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  interactions          QuestionInteraction[]
+  
+  // Índices otimizados para consultas frequentes
+  @@index([userId, createdAt(sort: Desc)]) // Sessões recentes por usuário
+  @@index([status, createdAt])             // Sessões ativas/recentes
+  @@index([studyGoal, userId])             // Filtro por objetivo
+  @@map("study_sessions")
+}
+
+model QuestionInteraction {
+  id                    String      @id @default(uuid())
+  sessionId             String
+  userId                String
+  
+  // Dados essenciais da questão
+  questionId            String      @db.VarChar(100) // Limitado para economia
+  topic                 String      @db.VarChar(100) // Limitado
+  bloomLevel            BloomLevel
+  
+  // Métricas core
+  timeToAnswer          Int         @db.SmallInt // Segundos (SmallInt suficiente)
+  isCorrect             Boolean
+  difficultyLevel       DifficultyLevel
+  
+  // Campos opcionais (apenas quando necessário)
+  confidenceLevel       Int?        @db.SmallInt // 1-5
+  hintsUsed             Int         @default(0) @db.SmallInt
+  
+  timestamp             DateTime    @default(now())
+  
+  // Relacionamentos
+  session               StudySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Índices para analytics (otimizados)
+  @@index([userId, timestamp(sort: Desc)]) // Interações recentes
+  @@index([topic, isCorrect])              // Performance por tópico
+  @@index([bloomLevel, userId])            // Análise por nível
+  @@map("question_interactions")
+}
+
+model TopicProgress {
+  id                    String      @id @default(uuid())
+  userId                String
+  topic                 String      @db.VarChar(100) // Limitado para economia
+  
+  // Métricas agregadas (atualizadas por batch job)
+  totalQuestions        Int         @default(0)
+  correctAnswers        Int         @default(0)
+  lastStudied           DateTime?
+  
+  // Score consolidado (0-100) - evita múltiplos campos
+  masteryScore          Int         @default(0) @db.SmallInt // 0-100
+  
+  // Repetição espaçada (algoritmo SM-2 simplificado)
+  nextReviewDate        DateTime?
+  reviewInterval        Int         @default(1) @db.SmallInt // Dias
+  priority              Int         @default(5) @db.SmallInt // 1-10
+  
+  updatedAt             DateTime    @updatedAt
+  
+  // Relacionamentos
+  user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Índices otimizados
+  @@unique([userId, topic])
+  @@index([nextReviewDate, priority]) // Revisões prioritárias
+  @@index([userId, masteryScore])     // Progresso do usuário
+  @@map("topic_progress")
+}
+
+model UserPreferences {
+  id                    String      @id @default(uuid())
+  userId                String      @unique
+  
+  // Configurações essenciais
+  sessionDuration       Int         @default(30) @db.SmallInt // Minutos
+  difficulty            DifficultyLevel @default(MEDIUM)
+  studyGoals            StudyGoal[] // Objetivos preferidos
+  
+  // Flags de configuração (compactas)
+  enableReminders       Boolean     @default(true)
+  enableGamification    Boolean     @default(true)
+  enableAI              Boolean     @default(true)
+  
+  updatedAt             DateTime    @updatedAt
+  
+  // Relacionamentos
+  user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("user_preferences")
+}
+
+model UserMetricsCache {
+  id                    String      @id @default(uuid())
+  userId                String      @unique
+  
+  // Métricas principais (cache para dashboard)
+  totalStudyTime        Int         @default(0) // Minutos totais
+  totalSessions         Int         @default(0)
+  totalQuestions        Int         @default(0)
+  correctAnswers        Int         @default(0)
+  
+  // Streak e engagement
+  currentStreak         Int         @default(0) @db.SmallInt
+  longestStreak         Int         @default(0) @db.SmallInt
+  lastStudyDate         DateTime?
+  
+  // Performance agregada
+  overallScore          Int         @default(0) @db.SmallInt // 0-100
+  
+  // Top tópicos (limitados para economia)
+  strongTopics          String[]    // Top 3 tópicos fortes
+  weakTopics            String[]    // Top 3 tópicos fracos
+  
+  // Cache de recomendações (JSON compacto)
+  recommendations       Json?       // Próximas ações recomendadas
+  
+  lastCalculated        DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+  
+  // Relacionamentos
+  user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("user_metrics_cache")
+}
+
+// Sistema de conquistas simplificado
+enum AchievementType {
+  STREAK              // Conquistas de sequência
+  PERFORMANCE         // Conquistas de performance
+  VOLUME              // Conquistas de volume
+  MASTERY             // Conquistas de domínio
+}
+
+model Achievement {
+  id                    String          @id @default(uuid())
+  name                  String          @unique @db.VarChar(100)
+  description           String          @db.VarChar(255)
+  type                  AchievementType
+  icon                  String?         @db.VarChar(50)
+  
+  // Critérios simplificados
+  targetValue           Int             // Valor alvo para conquistar
+  points                Int             @default(0) @db.SmallInt
+  
+  isActive              Boolean         @default(true)
+  
+  // Relacionamentos
+  userAchievements      UserAchievement[]
+  
+  @@map("achievements")
+}
+
+model UserAchievement {
+  id                    String      @id @default(uuid())
+  userId                String
+  achievementId         String
+  
+  unlockedAt            DateTime    @default(now())
+  currentValue          Int         @default(0) // Progresso atual
+  
+  // Relacionamentos
+  user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement           Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, achievementId])
+  @@index([userId, unlockedAt(sort: Desc)]) // Conquistas recentes
+  @@map("user_achievements")
+}
+
+// ==========================================
+// TABELA DE LIMPEZA AUTOMÁTICA (CUSTO ZERO)
+// ==========================================
+
+model DataRetentionPolicy {
+  id                    String      @id @default(uuid())
+  tableName             String      @unique
+  retentionDays         Int         // Dias para manter os dados
+  lastCleanup           DateTime?
+  isActive              Boolean     @default(true)
+  
+  @@map("data_retention_policies")
 }

@@ -20,13 +20,10 @@ export class DocumentsService {
     userId: string,
   ): Promise<DocumentResponseDto> {
     try {
-      // Validar arquivo
       this.fileProcessingService.validateFile(file);
 
-      // Salvar arquivo
       const { filename, filePath } = await this.fileProcessingService.saveFile(file);
 
-      // Criar registro no banco
       const document = await this.prisma.document.create({
         data: {
           userId,
@@ -41,7 +38,6 @@ export class DocumentsService {
 
       this.logger.log(`Documento criado: ${document.id}`);
 
-      // Processar documento em background
       this.processDocumentAsync(document.id);
 
       return this.mapToResponseDto(document);
@@ -83,10 +79,8 @@ export class DocumentsService {
       throw new NotFoundException('Documento não encontrado');
     }
 
-    // Deletar arquivo físico
     await this.fileProcessingService.deleteFile(document.filePath);
 
-    // Deletar do banco (cascade vai deletar a análise)
     await this.prisma.document.delete({
       where: { id },
     });
@@ -130,8 +124,8 @@ export class DocumentsService {
           documentId,
           summary: analysis.summary,
           keywords: analysis.keywords,
-          mindMap: analysis.mindMap as any, // Conversão explícita para Json
-          questions: analysis.questions as any, // Conversão explícita para Json
+          mindMap: analysis.mindMap as any, 
+          questions: analysis.questions as any, 
         },
       });
 
