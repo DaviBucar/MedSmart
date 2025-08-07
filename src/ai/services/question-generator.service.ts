@@ -48,6 +48,11 @@ export class QuestionGeneratorService {
   }
 
   private async analyzeUserPerformance(userId: string, sessionId: string): Promise<UserPerformanceContext> {
+    // Validar sessionId
+    if (!sessionId) {
+      throw new Error('SessionId é obrigatório para análise de performance');
+    }
+
     // Buscar dados da sessão atual
     const currentSession = await this.prisma.studySession.findUnique({
       where: { id: sessionId },
@@ -58,6 +63,11 @@ export class QuestionGeneratorService {
         },
       },
     });
+
+    // Se a sessão não for encontrada, usar valores padrão
+    if (!currentSession) {
+      this.logger.warn(`Sessão ${sessionId} não encontrada. Usando valores padrão.`);
+    }
 
     // Buscar histórico recente (últimas 50 interações)
     const recentInteractions = await this.prisma.questionInteraction.findMany({

@@ -9,12 +9,14 @@ import {
   UseGuards,
   Request,
   HttpStatus,
-  ParseUUIDPipe,
+  BadRequestException,
+  NotFoundException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { DocumentsService } from './services/documents.service';
 import { DocumentResponseDto } from './dto/document-response.dto';
+import { validate as isUUID } from 'uuid';
 
 @Controller('documents')
 @UseGuards(JwtAuthGuard)
@@ -28,7 +30,7 @@ export class DocumentsController {
     @Request() req,
   ): Promise<{ message: string; document: DocumentResponseDto }> {
     if (!file) {
-      throw new Error('Nenhum arquivo foi enviado');
+      throw new BadRequestException('Nenhum arquivo foi enviado');
     }
 
     const document = await this.documentsService.uploadDocument(file, req.user.id);
@@ -46,17 +48,27 @@ export class DocumentsController {
 
   @Get(':id')
   async getDocument(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id') id: string,
     @Request() req,
   ): Promise<DocumentResponseDto> {
+    // Validate UUID format manually to return 404 for invalid IDs
+    if (!isUUID(id)) {
+      throw new NotFoundException('Documento não encontrado');
+    }
+    
     return this.documentsService.getDocument(id, req.user.id);
   }
 
   @Delete(':id')
   async deleteDocument(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id') id: string,
     @Request() req,
   ): Promise<{ message: string }> {
+    // Validate UUID format manually to return 404 for invalid IDs
+    if (!isUUID(id)) {
+      throw new NotFoundException('Documento não encontrado');
+    }
+    
     await this.documentsService.deleteDocument(id, req.user.id);
     return { message: 'Documento deletado com sucesso' };
   }

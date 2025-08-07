@@ -27,7 +27,10 @@ export class AuthService {
       data: { name: dto.name, email: dto.email, password: hashed },
     });
     const payload = { sub: user.id, role: user.role };
-    return { accessToken: this.jwtService.sign(payload) };
+    return { 
+      token: this.jwtService.sign(payload),
+      user: { id: user.id, email: user.email, name: user.name }
+    };
   }
 
   async validateUser(email: string, pass: string) {
@@ -58,7 +61,7 @@ export class AuthService {
     );
 
     return {
-      accessToken: token,
+      token: token,
       user: { id: user.id, email: user.email, name: user.name },
     };
   }

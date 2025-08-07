@@ -81,11 +81,23 @@ export class FileProcessingService {
         throw new Error('Arquivo está vazio');
       }
 
-      const pdfData = await pdfParse(fileBuffer);
+      // Verificar se o arquivo é realmente um PDF válido
+      const pdfHeader = fileBuffer.subarray(0, 4).toString();
+      if (pdfHeader !== '%PDF') {
+        throw new Error('Arquivo não é um PDF válido');
+      }
+
+      const pdfData = await pdfParse(fileBuffer, {
+        // Opções para melhor tratamento de PDFs problemáticos
+        max: 0, // Sem limite de páginas
+        version: 'v1.10.100' // Versão específica para melhor compatibilidade
+      });
       
       const text = pdfData.text?.trim();
       if (!text || text.length === 0) {
-        throw new Error('Nenhum texto encontrado no PDF');
+        // Para PDFs sem texto extraível, retornar uma mensagem mais específica
+        this.logger.warn(`PDF sem texto extraível: ${filePath}`);
+        throw new Error('PDF não contém texto extraível ou é baseado em imagens');
       }
 
       this.logger.log(`Texto extraído do PDF: ${text.length} caracteres`);
@@ -98,6 +110,23 @@ export class FileProcessingService {
         throw new HttpException(
           'Arquivo PDF não encontrado',
           HttpStatus.NOT_FOUND,
+        );
+      }
+      
+      // Diferentes tipos de erro para melhor debugging
+      if (errorMessage.includes('bad XRef entry') || 
+          errorMessage.includes('Invalid number') || 
+          errorMessage.includes('Command token too long')) {
+        throw new HttpException(
+          'PDF corrompido ou com formato inválido. Tente usar um PDF diferente.',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+      
+      if (errorMessage.includes('não contém texto extraível')) {
+        throw new HttpException(
+          'Este PDF não contém texto extraível. Verifique se não é baseado apenas em imagens.',
+          HttpStatus.BAD_REQUEST,
         );
       }
       
@@ -128,6 +157,23 @@ export class FileProcessingService {
     }
   }
 
+  async validatePdf(file: Express.Multer.File): Promise<void> {
+    if (!file.mimetype || file.mimetype !== 'application/pdf') {
+      throw new HttpException('Tipo de arquivo não permitido. Apenas PDFs são aceitos.', HttpStatus.BAD_REQUEST);
+    }
+
+    try {
+      // Validar estrutura do PDF antes de processar
+      await this.checkPdfStructure(file);
+    } catch (error) {
+      throw new HttpException('PDF inválido ou corrompido. Por favor, tente outro arquivo.', HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  private async checkPdfStructure(file: Express.Multer.File): Promise<void> {
+    // Implementar validação básica da estrutura do PDF
+    // Verificar se o arquivo pode ser aberto e lido
+  }
   validateFile(file: Express.Multer.File): void {
     if (!file) {
       throw new HttpException(

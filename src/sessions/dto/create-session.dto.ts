@@ -1,12 +1,13 @@
-import { IsEnum, IsOptional, IsString, IsArray, IsInt, Min } from 'class-validator';
-import { StudyGoal, DifficultyLevel } from '@prisma/client';
+import { IsEnum, IsOptional, IsString, IsArray, IsInt, Min, IsUUID } from 'class-validator';
+import { StudyGoal } from '@prisma/client';
 
 export class CreateSessionDto {
   @IsEnum(StudyGoal)
   studyGoal!: StudyGoal;
 
-  @IsEnum(DifficultyLevel)
-  difficultyLevel!: DifficultyLevel;
+  @IsOptional()
+  @IsUUID()
+  documentId?: string;
 
   @IsOptional()
   @IsString()

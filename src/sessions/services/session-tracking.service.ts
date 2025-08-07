@@ -23,6 +23,11 @@ export class SessionTrackingService {
     interactionDto: CreateQuestionInteractionDto,
   ) {
     try {
+      // Validar se sessionId não é undefined
+      if (!sessionId) {
+        throw new Error('SessionId é obrigatório');
+      }
+
       await this.sessionValidator.validateActiveSession(userId, sessionId);
 
       const interaction = await this.prisma.questionInteraction.create({

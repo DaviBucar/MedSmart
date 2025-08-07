@@ -30,6 +30,7 @@ export class SessionsService {
           deviceType: createSessionDto.deviceType,
           status: SessionStatus.ACTIVE,
           startTime: new Date(),
+          // Removido difficultyLevel pois não existe no schema
         },
       });
 

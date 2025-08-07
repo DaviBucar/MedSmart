@@ -29,7 +29,8 @@ async function bootstrap() {
     }),
   );
   
-  const port = process.env.PORT || 3030;
+  // Força a porta 3002
+  const port = 3002;
   console.log(`🚀 Application is running on: http://localhost:${port}`);
   await app.listen(port);
 }

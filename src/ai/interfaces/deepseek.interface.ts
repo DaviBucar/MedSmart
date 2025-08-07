@@ -13,11 +13,70 @@ export interface DeepSeekResponse {
   };
 }
 
+export interface SummaryStructure {
+  hook: string;
+  overview: string;
+  keyInsights: string[];
+  practicalApplications: string;
+  whyItMatters: string;
+}
+
+export interface KeywordsStructure {
+  essential: string[];
+  supporting: string[];
+  advanced: string[];
+}
+
+export interface LearningPath {
+  prerequisites: string;
+  sequence: string[];
+  timeEstimate: string;
+  nextSteps: string;
+}
+
+export interface EnhancedQuestion {
+  id: number;
+  category: string;
+  bloomLevel: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+  question: string;
+  type: 'multiple_choice' | 'open_ended' | 'true_false';
+  context?: string;
+  options?: string[];
+  correctAnswer: string | number;
+  explanation: string;
+  studyTip: string;
+}
+
+export interface Metacognition {
+  selfAssessment: string;
+  commonMistakes: string[];
+  deeperQuestions: string[];
+  connections: string;
+}
+
+export interface StudyStrategy {
+  immediate: string;
+  shortTerm: string;
+  mediumTerm: string;
+  longTerm: string;
+}
+
+export interface EnhancedMindMapNode {
+  title: string;
+  level: number;
+  summary?: string;
+  children: EnhancedMindMapNode[];
+}
+
 export interface AIAnalysisResult {
-  summary: string;
-  keywords: string[];
-  mindMap: MindMapNode;
-  questions: Question[];
+  summary: SummaryStructure;
+  keywords: KeywordsStructure;
+  mindMap: EnhancedMindMapNode;
+  learningPath: LearningPath;
+  questions: EnhancedQuestion[];
+  metacognition: Metacognition;
+  studyStrategy: StudyStrategy;
 }
 
 export interface MindMapNode {

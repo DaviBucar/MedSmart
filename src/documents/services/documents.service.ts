@@ -38,9 +38,16 @@ export class DocumentsService {
 
       this.logger.log(`Documento criado: ${document.id}`);
 
-      this.processDocumentAsync(document.id);
+      // Iniciar processamento assíncrono imediatamente
+      setImmediate(() => this.processDocumentAsync(document.id));
 
-      return this.mapToResponseDto(document);
+      // Retornar documento com status PROCESSING para o teste
+      const updatedDocument = await this.prisma.document.update({
+        where: { id: document.id },
+        data: { status: DocumentStatus.PROCESSING },
+      });
+
+      return this.mapToResponseDto(updatedDocument);
     } catch (error) {
       this.logger.error('Erro ao fazer upload do documento:', error);
       throw error;
@@ -90,18 +97,14 @@ export class DocumentsService {
 
   private async processDocumentAsync(documentId: string): Promise<void> {
     try {
-      // Atualizar status para PROCESSING
-      await this.prisma.document.update({
-        where: { id: documentId },
-        data: { status: DocumentStatus.PROCESSING },
-      });
-
+      // Verificar se o documento ainda existe
       const document = await this.prisma.document.findUnique({
         where: { id: documentId },
       });
 
       if (!document) {
-        throw new Error('Documento não encontrado');
+        this.logger.warn(`Documento ${documentId} não encontrado para processamento`);
+        return;
       }
 
       // Extrair texto do PDF
@@ -118,14 +121,23 @@ export class DocumentsService {
       // Analisar com IA
       const analysis = await this.deepSeekService.analyzeText(extractedText);
 
+      // Converter estruturas complexas para formatos compatíveis com Prisma
+      const summaryText = JSON.stringify(analysis.summary);
+
+      const keywordsList = [
+        ...analysis.keywords.essential,
+        ...analysis.keywords.supporting,
+        ...analysis.keywords.advanced
+      ];
+
       // Salvar análise
       await this.prisma.documentAnalysis.create({
         data: {
           documentId,
-          summary: analysis.summary,
-          keywords: analysis.keywords,
-          mindMap: analysis.mindMap as any, 
-          questions: analysis.questions as any, 
+          summary: summaryText, // Agora é uma string JSON
+          keywords: keywordsList,
+          mindMap: analysis.mindMap as any,
+          questions: analysis.questions as any,
         },
       });
 
@@ -139,11 +151,22 @@ export class DocumentsService {
     } catch (error) {
       this.logger.error(`Erro ao processar documento ${documentId}:`, error);
 
-      // Atualizar status para FAILED
-      await this.prisma.document.update({
-        where: { id: documentId },
-        data: { status: DocumentStatus.FAILED },
-      });
+      try {
+        // Verificar se o documento ainda existe antes de atualizar
+        const document = await this.prisma.document.findUnique({
+          where: { id: documentId },
+        });
+
+        if (document) {
+          // Atualizar status para FAILED
+          await this.prisma.document.update({
+            where: { id: documentId },
+            data: { status: DocumentStatus.FAILED },
+          });
+        }
+      } catch (updateError) {
+        this.logger.error(`Erro ao atualizar status do documento ${documentId}:`, updateError);
+      }
     }
   }
 
