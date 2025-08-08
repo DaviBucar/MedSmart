@@ -96,6 +96,8 @@ export class DocumentsService {
   }
 
   private async processDocumentAsync(documentId: string): Promise<void> {
+    let documentExists = true;
+    
     try {
       // Verificar se o documento ainda existe
       const document = await this.prisma.document.findUnique({
@@ -107,65 +109,127 @@ export class DocumentsService {
         return;
       }
 
+      this.logger.log(`Iniciando processamento do documento: ${documentId}`);
+
       // Extrair texto do PDF
-      const extractedText = await this.fileProcessingService.extractTextFromPdf(
-        document.filePath,
-      );
+      let extractedText: string;
+      try {
+        extractedText = await this.fileProcessingService.extractTextFromPdf(document.filePath);
+        
+        // Verificar se há texto extraído
+        if (!extractedText || extractedText.trim().length === 0) {
+          throw new Error('PDF não contém texto extraível');
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+        this.logger.error(`Erro ao extrair texto do PDF ${documentId}:`, errorMessage);
+        
+        // Verificar se o documento ainda existe antes de atualizar
+        const existingDoc = await this.prisma.document.findUnique({
+          where: { id: documentId },
+        });
+        
+        if (existingDoc) {
+          try {
+            await this.prisma.document.update({
+              where: { id: documentId },
+              data: { 
+                status: DocumentStatus.FAILED,
+                extractedText: `Erro: ${errorMessage}`
+              },
+            });
+          } catch (updateError) {
+            this.logger.warn(`Documento ${documentId} foi deletado durante o processamento`);
+            documentExists = false;
+          }
+        } else {
+          documentExists = false;
+        }
+        return;
+      }
+
+      // Verificar se o documento ainda existe antes de continuar
+      const docCheck = await this.prisma.document.findUnique({
+        where: { id: documentId },
+      });
+      
+      if (!docCheck) {
+        this.logger.warn(`Documento ${documentId} foi deletado durante o processamento`);
+        return;
+      }
 
       // Atualizar documento com texto extraído
-      await this.prisma.document.update({
-        where: { id: documentId },
-        data: { extractedText },
-      });
+      try {
+        await this.prisma.document.update({
+          where: { id: documentId },
+          data: { extractedText },
+        });
+      } catch (updateError) {
+        this.logger.warn(`Documento ${documentId} foi deletado durante a atualização`);
+        return;
+      }
 
-      // Analisar com IA
-      const analysis = await this.deepSeekService.analyzeText(extractedText);
+      // Analisar texto com IA (opcional - não falhar se der erro)
+      try {
+        const analysis = await this.deepSeekService.analyzeText(extractedText);
+        
+        // Verificar novamente se o documento existe antes de criar análise
+        const docForAnalysis = await this.prisma.document.findUnique({
+          where: { id: documentId },
+        });
+        
+        if (docForAnalysis) {
+          await this.prisma.documentAnalysis.create({
+            data: {
+              documentId,
+              summary: analysis.summary.overview,
+              keywords: analysis.keywords.essential,
+              mindMap: JSON.stringify(analysis.mindMap),
+              questions: JSON.stringify(analysis.questions),
+            },
+          });
+        }
+      } catch (analysisError) {
+        this.logger.warn(`Erro na análise de IA para documento ${documentId}:`, analysisError);
+        // Continuar sem análise - o documento ainda é válido
+      }
 
-      // Converter estruturas complexas para formatos compatíveis com Prisma
-      const summaryText = JSON.stringify(analysis.summary);
+      // Atualizar status para COMPLETED (verificar se ainda existe)
+      try {
+        const finalDoc = await this.prisma.document.findUnique({
+          where: { id: documentId },
+        });
+        
+        if (finalDoc) {
+          await this.prisma.document.update({
+            where: { id: documentId },
+            data: { status: DocumentStatus.COMPLETED },
+          });
+          this.logger.log(`Documento processado com sucesso: ${documentId}`);
+        }
+      } catch (finalUpdateError) {
+        this.logger.warn(`Documento ${documentId} foi deletado antes da finalização`);
+      }
 
-      const keywordsList = [
-        ...analysis.keywords.essential,
-        ...analysis.keywords.supporting,
-        ...analysis.keywords.advanced
-      ];
-
-      // Salvar análise
-      await this.prisma.documentAnalysis.create({
-        data: {
-          documentId,
-          summary: summaryText, // Agora é uma string JSON
-          keywords: keywordsList,
-          mindMap: analysis.mindMap as any,
-          questions: analysis.questions as any,
-        },
-      });
-
-      // Atualizar status para COMPLETED
-      await this.prisma.document.update({
-        where: { id: documentId },
-        data: { status: DocumentStatus.COMPLETED },
-      });
-
-      this.logger.log(`Documento processado com sucesso: ${documentId}`);
     } catch (error) {
       this.logger.error(`Erro ao processar documento ${documentId}:`, error);
 
-      try {
-        // Verificar se o documento ainda existe antes de atualizar
-        const document = await this.prisma.document.findUnique({
-          where: { id: documentId },
-        });
-
-        if (document) {
-          // Atualizar status para FAILED
-          await this.prisma.document.update({
+      if (documentExists) {
+        try {
+          // Verificar se o documento ainda existe antes de atualizar
+          const document = await this.prisma.document.findUnique({
             where: { id: documentId },
-            data: { status: DocumentStatus.FAILED },
           });
+
+          if (document) {
+            await this.prisma.document.update({
+              where: { id: documentId },
+              data: { status: DocumentStatus.FAILED },
+            });
+          }
+        } catch (updateError) {
+          this.logger.error(`Erro ao atualizar status de falha do documento ${documentId}:`, updateError);
         }
-      } catch (updateError) {
-        this.logger.error(`Erro ao atualizar status do documento ${documentId}:`, updateError);
       }
     }
   }

@@ -1,4 +1,9 @@
-%PDF-1.4
+const fs = require('fs');
+const path = require('path');
+
+// Create a simple but valid PDF with correct structure
+const createValidPDF = () => {
+  const pdfContent = `%PDF-1.4
 1 0 obj
 <<
 /Type /Catalog
@@ -84,4 +89,15 @@ trailer
 >>
 startxref
 873
-%%EOF
+%%EOF`;
+
+  // Create sample.pdf
+  fs.writeFileSync(path.join(__dirname, 'sample.pdf'), pdfContent);
+  
+  // Create integration-test.pdf
+  fs.writeFileSync(path.join(__dirname, 'integration-test.pdf'), pdfContent);
+  
+  console.log('✅ Valid PDFs created: sample.pdf and integration-test.pdf');
+};
+
+createValidPDF();

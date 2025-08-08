@@ -175,8 +175,8 @@ export class QuestionGeneratorService {
     // Gerar prompt personalizado para a IA
     const prompt = this.buildPersonalizedPrompt(topic, difficulty, bloomLevel, context, metrics);
 
-    // Chamar IA para gerar questão
-    const aiResponse = await this.deepSeekService.analyzeText(prompt);
+    // Chamar IA para gerar questão usando o método específico
+    const aiResponse = await this.deepSeekService.generateQuestion(prompt);
 
     // Processar resposta da IA
     return this.parseQuestionFromAI(aiResponse, topic, difficulty, bloomLevel);
@@ -244,27 +244,32 @@ RESPONDA APENAS COM JSON VÁLIDO.
 
   private parseQuestionFromAI(aiResponse: any, topic: string, difficulty: DifficultyLevel, bloomLevel: BloomLevel): GeneratedQuestion {
     try {
-      // Extrair questão da resposta da IA
-      const questionData = typeof aiResponse === 'string' ? JSON.parse(aiResponse) : aiResponse.questions?.[0];
-      
-      if (!questionData) {
-        throw new Error('Resposta da IA não contém questão válida');
+      // Se a resposta da IA é null ou inválida, usar fallback
+      if (!aiResponse) {
+        this.logger.warn('Resposta da IA é null, usando fallback');
+        return this.createFallbackQuestion(topic, difficulty, bloomLevel);
+      }
+
+      // Verificar se a resposta tem a estrutura esperada
+      if (!aiResponse.question || !aiResponse.options || !Array.isArray(aiResponse.options)) {
+        this.logger.warn('Estrutura da questão inválida, usando fallback');
+        return this.createFallbackQuestion(topic, difficulty, bloomLevel);
       }
 
       return {
         id: this.generateQuestionId(),
-        question: questionData.question,
+        question: aiResponse.question,
         type: 'multiple_choice',
         topic,
         difficultyLevel: difficulty,
         bloomLevel,
-        options: questionData.options || [],
-        correctAnswer: questionData.correctAnswer || 0,
-        explanation: questionData.explanation || 'Explicação não disponível',
-        studyTip: questionData.studyTip || 'Continue praticando este tópico',
-        estimatedTimeSeconds: questionData.estimatedTimeSeconds || 60,
-        tags: questionData.tags || [topic, difficulty, bloomLevel],
-        context: questionData.context,
+        options: aiResponse.options,
+        correctAnswer: aiResponse.correctAnswer || 0,
+        explanation: aiResponse.explanation || 'Explicação não disponível',
+        studyTip: aiResponse.studyTip || 'Continue praticando este tópico',
+        estimatedTimeSeconds: aiResponse.estimatedTimeSeconds || 60,
+        tags: aiResponse.tags || [topic, difficulty, bloomLevel],
+        context: aiResponse.context,
       };
     } catch (error) {
       this.logger.error('Erro ao processar resposta da IA:', error);

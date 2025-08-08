@@ -322,3 +322,29 @@ model DataRetentionPolicy {
   
   @@map("data_retention_policies")
 }
+
+// ==========================================
+// CACHE DE IA - OTIMIZAÇÃO DE CUSTOS
+// ==========================================
+
+model AICache {
+  id                    String      @id @default(uuid())
+  cacheKey              String      @unique @db.VarChar(255) // Hash da consulta
+  cacheType             String      @db.VarChar(50)          // 'analysis' ou 'question'
+  contentHash           String      @db.VarChar(64)          // SHA-256 do conteúdo
+  
+  // Dados do cache
+  data                  Json        // Resposta da API armazenada
+  
+  // Controle de TTL e estatísticas
+  expiresAt             DateTime    // TTL para expiração automática
+  createdAt             DateTime    @default(now())
+  lastAccessed          DateTime    @default(now())
+  hitCount              Int         @default(0) @db.SmallInt // Contador de uso
+  
+  // Índices otimizados para performance
+  @@index([cacheKey, cacheType])     // Busca rápida
+  @@index([expiresAt])               // Limpeza automática
+  @@index([cacheType, lastAccessed]) // Analytics de uso
+  @@map("ai_cache")
+}

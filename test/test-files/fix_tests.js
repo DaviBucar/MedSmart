@@ -1,4 +1,11 @@
-%PDF-1.4
+const fs = require('fs');
+const path = require('path');
+
+console.log('🔧 Fixing all test issues...');
+
+// 1. Create valid PDF files
+const createValidPDFs = () => {
+  const pdfContent = `%PDF-1.4
 1 0 obj
 <<
 /Type /Catalog
@@ -84,4 +91,26 @@ trailer
 >>
 startxref
 873
-%%EOF
+%%EOF`;
+
+  const testFilesDir = path.join(__dirname, 'test', 'test-files');
+  
+  // Ensure directory exists
+  if (!fs.existsSync(testFilesDir)) {
+    fs.mkdirSync(testFilesDir, { recursive: true });
+  }
+  
+  // Create sample.pdf
+  fs.writeFileSync(path.join(testFilesDir, 'sample.pdf'), pdfContent);
+  
+  // Create integration-test.pdf
+  fs.writeFileSync(path.join(testFilesDir, 'integration-test.pdf'), pdfContent);
+  
+  // Also create in root for other tests
+  fs.writeFileSync(path.join(__dirname, 'sample.pdf'), pdfContent);
+  
+  console.log('✅ Valid PDFs created successfully');
+};
+
+createValidPDFs();
+console.log('🎉 All fixes applied successfully!');

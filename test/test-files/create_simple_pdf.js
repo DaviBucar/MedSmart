@@ -1,4 +1,7 @@
-%PDF-1.4
+const fs = require('fs');
+
+// Criar um PDF simples e válido manualmente
+const pdfContent = `%PDF-1.4
 1 0 obj
 <<
 /Type /Catalog
@@ -30,33 +33,25 @@ endobj
 
 4 0 obj
 <<
-/Length 450
+/Length 200
 >>
 stream
 BT
 /F1 12 Tf
 50 750 Td
-(MedSmart - Sistema de Estudos Medicos) Tj
-0 -30 Td
-(Documento de Teste para Cardiologia) Tj
-0 -50 Td
-(Conteudo Educacional:) Tj
-0 -30 Td
-(1. Anatomia e Fisiologia Cardiovascular) Tj
+(Documento de Teste - MedSmart) Tj
 0 -20 Td
-(2. Patologias Cardiacas Comuns) Tj
+(Este é um documento PDF de teste para o sistema MedSmart.) Tj
+0 -40 Td
+(Conteúdo de Cardiologia:) Tj
 0 -20 Td
-(3. Metodos Diagnosticos) Tj
+(- Anatomia do coração) Tj
 0 -20 Td
-(4. Tratamentos e Intervencoes) Tj
+(- Fisiologia cardiovascular) Tj
 0 -20 Td
-(5. Prevencao e Cuidados) Tj
-0 -50 Td
-(Este documento contem texto extraivel para testes.) Tj
+(- Patologias cardíacas) Tj
 0 -20 Td
-(Sistema MedSmart - Educacao Medica Inteligente) Tj
-0 -30 Td
-(Teste de integracao completo do sistema.) Tj
+(- Diagnóstico e tratamento) Tj
 ET
 endstream
 endobj
@@ -76,12 +71,15 @@ xref
 0000000058 00000 n 
 0000000115 00000 n 
 0000000274 00000 n 
-0000000776 00000 n 
+0000000526 00000 n 
 trailer
 <<
 /Size 6
 /Root 1 0 R
 >>
 startxref
-873
-%%EOF
+623
+%%EOF`;
+
+fs.writeFileSync('sample.pdf', pdfContent);
+console.log('PDF válido criado: sample.pdf');

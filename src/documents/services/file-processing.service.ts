@@ -171,8 +171,55 @@ export class FileProcessingService {
   }
 
   private async checkPdfStructure(file: Express.Multer.File): Promise<void> {
-    // Implementar validação básica da estrutura do PDF
-    // Verificar se o arquivo pode ser aberto e lido
+    try {
+      // Verificar se o buffer do arquivo existe e não está vazio
+      if (!file.buffer || file.buffer.length === 0) {
+        throw new Error('Arquivo PDF está vazio ou corrompido');
+      }
+
+      // Verificar cabeçalho PDF
+      const pdfHeader = file.buffer.subarray(0, 4).toString();
+      if (pdfHeader !== '%PDF') {
+        throw new Error('Arquivo não possui cabeçalho PDF válido');
+      }
+
+      // Verificar se o PDF pode ser parseado (mais tolerante)
+      try {
+        const result = await pdfParse(file.buffer, {
+          max: 1, // Apenas primeira página para validação
+          version: 'v1.10.100'
+        });
+        
+        // Verificar se há pelo menos algum conteúdo
+        if (!result.text || result.text.trim().length === 0) {
+          this.logger.warn('PDF válido mas sem texto extraível');
+          // Não falhar aqui - deixar o processamento principal lidar com isso
+        }
+      } catch (parseError) {
+        const errorMessage = parseError instanceof Error ? parseError.message : 'Erro desconhecido';
+        
+        // Ser mais tolerante com erros de parsing menores
+        if (errorMessage.includes('Warning: Indexing all PDF objects')) {
+          this.logger.warn('PDF com estrutura complexa, mas processável');
+          return; // Permitir processamento
+        }
+        
+        // Apenas falhar em erros críticos
+        if (errorMessage.includes('bad XRef entry') || 
+            errorMessage.includes('Invalid number') || 
+            errorMessage.includes('Command token too long') ||
+            errorMessage.includes('Invalid PDF structure')) {
+          throw new Error('PDF possui estrutura inválida ou está corrompido');
+        }
+        
+        // Para outros erros, apenas avisar mas permitir processamento
+        this.logger.warn(`Aviso na validação do PDF: ${errorMessage}`);
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+      this.logger.error('Erro na validação da estrutura do PDF:', errorMessage);
+      throw error;
+    }
   }
   validateFile(file: Express.Multer.File): void {
     if (!file) {
