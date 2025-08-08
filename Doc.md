@@ -99,7 +99,8 @@ Autentica um usuário existente e retorna token de acesso.
 Renova um token JWT expirado.
 
 #### Headers Obrigatórios
-```
+
+Authorization: Bearer
 
 ## 📚 MÓDULO DE SESSÕES DE ESTUDO (`/sessions`)
 
