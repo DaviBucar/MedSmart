@@ -4,7 +4,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { DocumentsModule } from './documents/documents.module';
 import { SessionsModule } from './sessions/sessions.module';
-import { AIModule } from './ai/ai.module';
+import { AiModule } from './ai/ai.module';
 import configuration from './config/configuration';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -22,7 +22,7 @@ import { AppService } from './app.service';
     AuthModule,
     DocumentsModule,
     SessionsModule,
-    AIModule,
+    AiModule,
   ],
   controllers: [AppController],
   providers: [AppService],

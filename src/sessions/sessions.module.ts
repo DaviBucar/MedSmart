@@ -20,10 +20,10 @@ import { RecommendationEngineProvider } from './services/providers/recommendatio
 import { GamificationEngineProvider } from './services/providers/gamification-engine.provider';
 
 import { PrismaModule } from '../prisma/prisma.module';
-import { AIModule } from '../ai/ai.module';
+import { AiModule } from '../ai/ai.module';
 
 @Module({
-  imports: [PrismaModule, AIModule],
+  imports: [PrismaModule, AiModule],
   controllers: [SessionsController],
   providers: [
     // Services principais

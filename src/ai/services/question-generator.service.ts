@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DeepSeekService } from './deepseek.service';
+import { ContextCompressionService } from './context-compression.service';
 import { 
   QuestionGenerationRequest, 
   GeneratedQuestion, 
@@ -8,6 +9,11 @@ import {
   UserPerformanceContext,
   AdaptiveLearningMetrics 
 } from '../interfaces/question-generation.interface';
+import { 
+  CompressedUserContext,
+  LearningProfileType,
+  AdaptationTag 
+} from '../interfaces/context-compression.interface';
 import { DifficultyLevel, BloomLevel } from '@prisma/client';
 
 @Injectable()
@@ -17,9 +23,10 @@ export class QuestionGeneratorService {
   constructor(
     private prisma: PrismaService,
     private deepSeekService: DeepSeekService,
+    private contextCompressionService: ContextCompressionService,
   ) {}
 
-  async generateAdaptiveQuestion(request: QuestionGenerationRequest): Promise<QuestionGenerationResponse> {
+  async generateAdaptiveQuestion(request: QuestionGenerationRequest): Promise<QuestionGenerationResponse | null> {
     try {
       this.logger.log(`Gerando questão adaptativa para usuário ${request.userId}`);
 
@@ -43,7 +50,8 @@ export class QuestionGeneratorService {
 
     } catch (error) {
       this.logger.error('Erro ao gerar questão adaptativa:', error);
-      throw error;
+      // Retornar null em caso de falha do serviço de IA
+      return null;
     }
   }
 
@@ -172,90 +180,203 @@ export class QuestionGeneratorService {
     // Determinar nível de Bloom
     const bloomLevel = request.bloomLevel || this.selectOptimalBloomLevel(context, difficulty);
 
+    // Comprimir contexto do usuário
+    const compressedContext = await this.contextCompressionService.compressUserContext(
+      request.userId, 
+      request.sessionId
+    );
+
     // Gerar prompt personalizado para a IA
-    const prompt = this.buildPersonalizedPrompt(topic, difficulty, bloomLevel, context, metrics);
+    const prompt = this.buildPersonalizedPrompt(topic, difficulty, bloomLevel, compressedContext);
 
-    // Chamar IA para gerar questão usando o método específico
-    const aiResponse = await this.deepSeekService.generateQuestion(prompt);
-
-    // Processar resposta da IA
-    return this.parseQuestionFromAI(aiResponse, topic, difficulty, bloomLevel);
+    try {
+      // Chamar IA para gerar questão usando o método específico
+      const aiResponse = await this.deepSeekService.generateQuestion(prompt);
+      
+      // Processar resposta da IA
+      return this.parseQuestionFromAI(aiResponse, topic, difficulty, bloomLevel);
+    } catch (error) {
+      // Propagar o erro em vez de usar fallback para permitir que generateAdaptiveQuestion retorne null
+      this.logger.error('Erro no DeepSeek Service:', error);
+      throw error;
+    }
   }
+
+  // Atualizar o método existente buildPersonalizedPrompt
 
   private buildPersonalizedPrompt(
     topic: string,
     difficulty: DifficultyLevel,
     bloomLevel: BloomLevel,
-    context: UserPerformanceContext,
-    metrics: AdaptiveLearningMetrics
+    compressedContext: CompressedUserContext
   ): string {
+    const profileInstructions = this.getProfileInstructions(compressedContext.profile.type);
+    const adaptationRules = this.buildAdaptationRules(compressedContext);
+    
     return `
-# GERADOR DE QUESTÃO PERSONALIZADA - MEDICINA
+    # QUESTÃO MÉDICA PERSONALIZADA
+  
+    ## PERFIL DO ESTUDANTE:
+    - Tipo: ${compressedContext.profile.type}
+    - Nível Atual: ${this.mapAccuracyToLevel(compressedContext.performance.overallAccuracy)}
+    - Estado: ${this.summarizeCurrentState(compressedContext.immediate)}
+  
+    ## PERFORMANCE:
+    - Precisão Geral: ${compressedContext.performance.overallAccuracy}%
+    - Sequência Atual: ${compressedContext.performance.currentStreak}
+    - Velocidade: ${this.mapVelocityToDescription(compressedContext.performance.learningVelocity)}
+  
+    ## FOCO ATUAL:
+    - Tópicos Fracos: ${compressedContext.performance.weakTopics.join(', ') || 'Nenhum'}
+    - Tópicos Fortes: ${compressedContext.performance.strongTopics.join(', ') || 'Nenhum'}
+  
+    ## PARÂMETROS DA QUESTÃO:
+    - Tópico: ${topic}
+    - Dificuldade: ${difficulty}
+    - Objetivo: ${this.mapBloomToObjective(bloomLevel)}
+  
+    ## ADAPTAÇÕES NECESSÁRIAS:
+    ${adaptationRules}
+  
+    ## INSTRUÇÕES ESPECÍFICAS:
+    ${profileInstructions}
+  
+    ${this.buildQuestionTemplate()}
+    `;
+    }
+  
+  private getProfileInstructions(profileType: LearningProfileType): string {
+    const instructions = {
+      [LearningProfileType.BEGINNER_CAUTIOUS]: 
+        "- Use linguagem clara e didática\n- Inclua dicas de estudo\n- Evite pegadinhas complexas",
+      [LearningProfileType.INTERMEDIATE_AMBITIOUS]: 
+        "- Desafie com casos práticos\n- Inclua nuances clínicas\n- Foque em aplicação prática",
+      [LearningProfileType.ADVANCED_PERFECTIONIST]: 
+        "- Use casos complexos e raros\n- Inclua detalhes técnicos\n- Explore diagnósticos diferenciais",
+      [LearningProfileType.STRATEGIC_REVIEWER]: 
+        "- Foque em pontos-chave\n- Otimize para memorização\n- Use mnemônicos quando apropriado"
+    };
+    
+    return instructions[profileType];
+  }
+  
+  private buildAdaptationRules(context: CompressedUserContext): string {
+    const rules: string[] = [];
+    
+    if (context.immediate.currentFatigue > 7) {
+      rules.push("- Questão mais direta devido à fadiga alta");
+    }
+    
+    if (context.immediate.recentAccuracy < 60) {
+      rules.push("- Focar em conceitos fundamentais");
+    }
+    
+    if (context.immediate.recentAccuracy > 85) {
+      rules.push("- Incluir nuances e casos complexos");
+    }
+    
+    context.profile.adaptationNeeds.forEach(tag => {
+      switch (tag) {
+        case AdaptationTag.CONFIDENCE_LOW:
+          rules.push("- Incluir encorajamento e dicas de estudo");
+          break;
+        case AdaptationTag.VISUAL_PREFERRED:
+          rules.push("- Descrever cenários visuais quando possível");
+          break;
+      }
+    });
+    
+    return rules.join('\n') || "- Nenhuma adaptação específica necessária";
+  }
+  
+  // Métodos auxiliares
+  private mapAccuracyToLevel(accuracy: number): string {
+    if (accuracy >= 85) return "Avançado";
+    if (accuracy >= 70) return "Intermediário";
+    if (accuracy >= 50) return "Iniciante";
+    return "Básico";
+  }
+  
+  private summarizeCurrentState(immediate: any): string {
+    const states: string[] = [];
+    
+    if (immediate.currentFatigue > 7) states.push("Cansado");
+    if (immediate.recentAccuracy > 80) states.push("Confiante");
+    if (immediate.recentAccuracy < 50) states.push("Desafiado");
+    
+    return states.join(", ") || "Normal";
+  }
+  
+  private mapVelocityToDescription(velocity: number): string {
+    if (velocity >= 0.8) return "Rápida";
+    if (velocity >= 0.6) return "Moderada";
+    if (velocity >= 0.4) return "Cautelosa";
+    return "Lenta";
+  }
 
-## CONTEXTO DO ESTUDANTE:
-- **Precisão Recente**: ${context.recentAccuracy.toFixed(1)}%
-- **Tempo Médio de Resposta**: ${context.averageResponseTime}s
-- **Tópicos Fracos**: ${context.weakTopics.join(', ') || 'Nenhum identificado'}
-- **Tópicos Fortes**: ${context.strongTopics.join(', ') || 'Nenhum identificado'}
-- **Nível de Fadiga**: ${context.fatigueLevel}/10
-- **Questões na Sessão**: ${context.sessionProgress.questionsAnswered}
+  private buildQuestionTemplate(): string {
+    return `
+    ## FORMATO DE RESPOSTA OBRIGATÓRIO (JSON):
+    {
+      "question": "Pergunta clara e específica sobre o tópico",
+      "type": "multiple_choice",
+      "options": [
+        "A) Primeira opção",
+        "B) Segunda opção", 
+        "C) Terceira opção",
+        "D) Quarta opção"
+      ],
+      "correctAnswer": 1,
+      "explanation": "Explicação detalhada da resposta correta e por que as outras estão incorretas",
+      "studyTip": "Dica específica para memorizar ou compreender melhor este conceito",
+      "estimatedTimeSeconds": 60,
+      "tags": ["tag1", "tag2", "tag3"],
+      "context": "Contexto clínico ou situação prática relacionada à questão"
+    }
 
-## PARÂMETROS DA QUESTÃO:
-- **Tópico**: ${topic}
-- **Dificuldade**: ${difficulty}
-- **Nível de Bloom**: ${bloomLevel}
-- **Velocidade de Aprendizado**: ${metrics.learningVelocity.toFixed(2)}
+    ## INSTRUÇÕES IMPORTANTES:
+    - A questão deve ser clinicamente relevante e baseada em evidências
+    - Use linguagem médica apropriada mas acessível
+    - Inclua distradores plausíveis nas opções incorretas
+    - A explicação deve ser educativa e completa
+    - O contexto deve simular situações reais da prática médica
+    - Responda APENAS com o JSON válido, sem texto adicional
+    `;
+  }
 
-## INSTRUÇÕES:
-Crie UMA questão de múltipla escolha personalizada que:
-
-1. **Seja adequada ao nível atual** do estudante
-2. **Foque no tópico especificado** com contexto médico realista
-3. **Tenha dificuldade ${difficulty}** apropriada para a performance atual
-4. **Use nível de Bloom ${bloomLevel}** adequadamente
-5. **Considere o nível de fadiga** (${context.fatigueLevel}/10)
-
-## FORMATO DE RESPOSTA (JSON):
-{
-  "question": "Pergunta clara e específica sobre ${topic}",
-  "options": [
-    "A) Opção correta e precisa",
-    "B) Distrator inteligente baseado em erro comum",
-    "C) Distrator plausível mas incorreto",
-    "D) Distrator obviamente incorreto"
-  ],
-  "correctAnswer": 0,
-  "explanation": "Explicação detalhada da resposta correta",
-  "studyTip": "Dica específica para memorizar/compreender este conceito",
-  "estimatedTimeSeconds": 45,
-  "tags": ["${topic}", "nivel-${difficulty}", "bloom-${bloomLevel}"],
-  "context": "Contexto clínico ou situação prática relevante"
-}
-
-## DIRETRIZES ESPECÍFICAS:
-- **Para fadiga alta (>7)**: Questões mais diretas e conceituais
-- **Para precisão baixa (<60%)**: Focar em conceitos fundamentais
-- **Para precisão alta (>80%)**: Incluir nuances e casos complexos
-- **Sempre**: Usar linguagem médica apropriada e cenários realistas
-
-RESPONDA APENAS COM JSON VÁLIDO.
-`;
+  private mapBloomToObjective(bloomLevel: BloomLevel): string {
+    switch (bloomLevel) {
+      case BloomLevel.REMEMBER:
+        return "Lembrar conceitos fundamentais";
+      case BloomLevel.UNDERSTAND:
+        return "Compreender e explicar";
+      case BloomLevel.APPLY:
+        return "Aplicar conhecimento na prática";
+      case BloomLevel.ANALYZE:
+        return "Analisar e comparar";
+      case BloomLevel.EVALUATE:
+        return "Avaliar e julgar";
+      case BloomLevel.CREATE:
+        return "Criar e sintetizar";
+      default:
+        return "Objetivo de aprendizado";
+    }
   }
 
   private parseQuestionFromAI(aiResponse: any, topic: string, difficulty: DifficultyLevel, bloomLevel: BloomLevel): GeneratedQuestion {
+    // Se a resposta da IA é null ou inválida, propagar o erro
+    if (!aiResponse) {
+      this.logger.warn('Resposta da IA é null, propagando erro');
+      throw new Error('Resposta da IA é null');
+    }
+
+    // Verificar se a resposta tem a estrutura esperada
+    if (!aiResponse.question || !aiResponse.options || !Array.isArray(aiResponse.options)) {
+      this.logger.warn('Estrutura da questão inválida, propagando erro');
+      throw new Error('Estrutura da questão inválida');
+    }
+
     try {
-      // Se a resposta da IA é null ou inválida, usar fallback
-      if (!aiResponse) {
-        this.logger.warn('Resposta da IA é null, usando fallback');
-        return this.createFallbackQuestion(topic, difficulty, bloomLevel);
-      }
-
-      // Verificar se a resposta tem a estrutura esperada
-      if (!aiResponse.question || !aiResponse.options || !Array.isArray(aiResponse.options)) {
-        this.logger.warn('Estrutura da questão inválida, usando fallback');
-        return this.createFallbackQuestion(topic, difficulty, bloomLevel);
-      }
-
       return {
         id: this.generateQuestionId(),
         question: aiResponse.question,
@@ -273,9 +394,8 @@ RESPONDA APENAS COM JSON VÁLIDO.
       };
     } catch (error) {
       this.logger.error('Erro ao processar resposta da IA:', error);
-      
-      // Fallback: questão básica
-      return this.createFallbackQuestion(topic, difficulty, bloomLevel);
+      // Propagar o erro em vez de usar fallback
+      throw error;
     }
   }
 

@@ -27,6 +27,7 @@ model User {
   userPreferences   UserPreferences?
   userMetricsCache  UserMetricsCache?
   achievements      UserAchievement[]
+  userLearningProfile UserLearningProfile?
 }
 
 enum Role {
@@ -347,4 +348,40 @@ model AICache {
   @@index([expiresAt])               // Limpeza automática
   @@index([cacheType, lastAccessed]) // Analytics de uso
   @@map("ai_cache")
+}
+
+
+// Adicionar ao final do arquivo existente
+
+model UserLearningProfile {
+  id                    String              @id @default(uuid())
+  userId                String              @unique
+  
+  // Tipo de perfil de aprendizado
+  profileType           LearningProfileType @default(INTERMEDIATE_AMBITIOUS)
+  
+  // Preferências identificadas
+  preferredDifficulty   DifficultyLevel     @default(MEDIUM)
+  optimalSessionDuration Int                @default(30) @db.SmallInt // minutos
+  preferredTimeSlots    Int[]               // horas do dia [9, 14, 20]
+  
+  // Métricas de aprendizado
+  learningVelocity      Float               @default(0.5) // 0-1
+  retentionRate         Float               @default(0.7) // 0-1
+  
+  // Controle
+  lastUpdated           DateTime            @updatedAt
+  createdAt             DateTime            @default(now())
+  
+  // Relacionamentos
+  user                  User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("user_learning_profiles")
+}
+
+enum LearningProfileType {
+  BEGINNER_CAUTIOUS
+  INTERMEDIATE_AMBITIOUS  
+  ADVANCED_PERFECTIONIST
+  STRATEGIC_REVIEWER
 }
