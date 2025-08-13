@@ -5,6 +5,7 @@ import { AuthModule } from './auth/auth.module';
 import { DocumentsModule } from './documents/documents.module';
 import { SessionsModule } from './sessions/sessions.module';
 import { AiModule } from './ai/ai.module';
+import { FlashcardsModule } from './flashcards/flashcards.module';
 import configuration from './config/configuration';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -23,6 +24,7 @@ import { AppService } from './app.service';
     DocumentsModule,
     SessionsModule,
     AiModule,
+    FlashcardsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

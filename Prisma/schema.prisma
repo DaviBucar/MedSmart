@@ -28,6 +28,11 @@ model User {
   userMetricsCache  UserMetricsCache?
   achievements      UserAchievement[]
   userLearningProfile UserLearningProfile?
+  
+  // Relacionamentos para flashcards
+  flashcards        Flashcard[]
+  flashcardReviews  FlashcardReview[]
+  flashcardDecks    FlashcardDeck[]
 }
 
 enum Role {
@@ -57,6 +62,7 @@ model Document {
   
   user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   analysis     DocumentAnalysis?
+  flashcards   Flashcard[]
   
   @@map("documents")
 }
@@ -140,6 +146,8 @@ model StudySession {
   // Relacionamentos
   user                  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   interactions          QuestionInteraction[]
+  flashcards            Flashcard[]
+  flashcardReviews      FlashcardReview[]
   
   // Índices otimizados para consultas frequentes
   @@index([userId, createdAt(sort: Desc)]) // Sessões recentes por usuário
@@ -384,4 +392,155 @@ enum LearningProfileType {
   INTERMEDIATE_AMBITIOUS  
   ADVANCED_PERFECTIONIST
   STRATEGIC_REVIEWER
+}
+
+enum FlashcardType {
+  SUMMARY_BASED
+  KEYWORD_BASED
+  MIND_MAP_BASED
+  PDF_CONTENT_BASED
+  QUESTION_BASED
+}
+
+enum FlashcardStatus {
+  PENDING
+  ACTIVE
+  MASTERED
+  ARCHIVED
+}
+
+enum ReviewResult {
+  AGAIN
+  HARD
+  GOOD
+  EASY
+}
+
+model Flashcard {
+  id                String            @id @default(cuid())
+  userId            String
+  sessionId         String?
+  documentId        String?
+  type              FlashcardType
+  status            FlashcardStatus   @default(PENDING)
+  
+  // Conteúdo do flashcard
+  front             String            // Pergunta/conceito
+  back              String            // Resposta/explicação
+  topic             String
+  tags              String[]          @default([])
+  difficultyLevel   DifficultyLevel   @default(MEDIUM)
+  
+  // Metadados de origem
+  sourceContent     String?           // Conteúdo original que gerou o flashcard
+  sourceType        String?           // 'summary', 'keyword', 'mindmap', 'pdf', 'question'
+  sourceReference   String?           // Referência específica (ex: página do PDF)
+  
+  // Spaced Repetition (algoritmo SM-2)
+  easeFactor        Float             @default(2.5)
+  interval          Int               @default(1)      // Dias até próxima revisão
+  repetitions       Int               @default(0)      // Número de repetições corretas consecutivas
+  nextReviewDate    DateTime          @default(now())
+  
+  // Estatísticas
+  totalReviews      Int               @default(0)
+  correctReviews    Int               @default(0)
+  averageResponseTime Float?          // Tempo médio de resposta em segundos
+  lastReviewResult  ReviewResult?
+  
+  // Timestamps
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  lastReviewedAt    DateTime?
+  
+  // Relacionamentos
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session           StudySession?     @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  document          Document?         @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  reviews           FlashcardReview[]
+  deckItems         FlashcardDeckItem[]
+  
+  // Índices para performance
+  @@index([userId, status])
+  @@index([userId, nextReviewDate])
+  @@index([sessionId])
+  @@index([documentId])
+  @@index([topic])
+  @@index([type])
+  @@map("flashcards")
+}
+
+model FlashcardReview {
+  id                String            @id @default(cuid())
+  flashcardId       String
+  userId            String
+  sessionId         String?
+  
+  // Resultado da revisão
+  result            ReviewResult
+  responseTime      Float?            // Tempo de resposta em segundos
+  confidence        Int?              @default(3) // 1-5 escala
+  
+  // Contexto da revisão
+  deviceType        String?
+  studyEnvironment  String?
+  timeOfDay         String?
+  
+  // Timestamps
+  reviewedAt        DateTime          @default(now())
+  
+  // Relacionamentos
+  flashcard         Flashcard         @relation(fields: [flashcardId], references: [id], onDelete: Cascade)
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session           StudySession?     @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  
+  // Índices para analytics
+  @@index([flashcardId])
+  @@index([userId, reviewedAt])
+  @@index([sessionId])
+  @@map("flashcard_reviews")
+}
+
+model FlashcardDeck {
+  id                String            @id @default(cuid())
+  userId            String
+  name              String
+  description       String?
+  color             String?           @default("#3B82F6")
+  
+  // Configurações do deck
+  isPublic          Boolean           @default(false)
+  allowSharing      Boolean           @default(false)
+  
+  // Estatísticas
+  totalFlashcards   Int               @default(0)
+  masteredCards     Int               @default(0)
+  
+  // Timestamps
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  
+  // Relacionamentos
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  flashcards        FlashcardDeckItem[]
+  
+  @@index([userId])
+  @@map("flashcard_decks")
+}
+
+model FlashcardDeckItem {
+  id                String            @id @default(cuid())
+  deckId            String
+  flashcardId       String
+  position          Int               @default(0)
+  
+  createdAt         DateTime          @default(now())
+  
+  // Relacionamentos
+  deck              FlashcardDeck     @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  flashcard         Flashcard         @relation(fields: [flashcardId], references: [id], onDelete: Cascade)
+  
+  @@unique([deckId, flashcardId])
+  @@index([deckId, position])
+  @@map("flashcard_deck_items")
 }
